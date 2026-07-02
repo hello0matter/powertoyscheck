@@ -174,12 +174,13 @@ class PowerToysCheck(tk.Tk):
 
         ws_buttons = ttk.Frame(left)
         ws_buttons.grid(row=1, column=0, sticky="ew", pady=(8, 0))
-        for i in range(4):
+        for i in range(5):
             ws_buttons.columnconfigure(i, weight=1)
         ttk.Button(ws_buttons, text="新增", command=self.add_workspace).grid(row=0, column=0, padx=2, sticky="ew")
         ttk.Button(ws_buttons, text="复制", command=self.duplicate_workspace).grid(row=0, column=1, padx=2, sticky="ew")
         ttk.Button(ws_buttons, text="删除", command=self.delete_workspace).grid(row=0, column=2, padx=2, sticky="ew")
         ttk.Button(ws_buttons, text="启动", command=self.launch_workspace).grid(row=0, column=3, padx=2, sticky="ew")
+        ttk.Button(ws_buttons, text="修复无反应", command=self.fix_stuck_launcher).grid(row=0, column=4, padx=2, sticky="ew")
 
         right = ttk.Frame(pane)
         right.columnconfigure(0, weight=1)
@@ -846,10 +847,52 @@ $shortcut.Save()
             f"\"Start-Process -FilePath '{ps_single(str(exe_path))}' -WorkingDirectory '{ps_single(str(exe_path.parent))}'\""
         )
 
+    def fix_stuck_launcher(self, show_message: bool = True) -> int:
+        names = {
+            "PowerToys.WorkspacesLauncher",
+            "PowerToys.WorkspacesLauncherUI",
+            "PowerToys.WorkspacesWindowArranger",
+        }
+        killed = 0
+        for proc in subprocess.run(
+            [
+                "powershell.exe",
+                "-NoProfile",
+                "-Command",
+                "Get-Process PowerToys.WorkspacesLauncher,PowerToys.WorkspacesLauncherUI,PowerToys.WorkspacesWindowArranger "
+                "-ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id",
+            ],
+            capture_output=True,
+            text=True,
+            creationflags=CREATE_NO_WINDOW,
+        ).stdout.splitlines():
+            proc = proc.strip()
+            if not proc.isdigit():
+                continue
+            try:
+                subprocess.run(
+                    ["powershell.exe", "-NoProfile", "-Command", f"Stop-Process -Id {proc} -Force"],
+                    check=False,
+                    creationflags=CREATE_NO_WINDOW,
+                )
+                killed += 1
+            except Exception:
+                pass
+
+        if show_message:
+            if killed:
+                self.status.set(f"已清理卡住的 PowerToys Workspaces 启动器进程：{killed} 个。")
+                messagebox.showinfo(APP_TITLE, f"已清理卡住的启动器进程：{killed} 个。\n现在可以再点桌面“快速启动”。")
+            else:
+                self.status.set("没有发现卡住的 Workspaces 启动器进程。")
+                messagebox.showinfo(APP_TITLE, "没有发现卡住的 Workspaces 启动器进程。")
+        return killed
+
     def launch_workspace(self) -> None:
         ws = self.selected_workspace()
         if not ws:
             return
+        self.fix_stuck_launcher(show_message=False)
         launcher = default_launcher_path()
         if not launcher.exists():
             path = filedialog.askopenfilename(title="选择 PowerToys.WorkspacesLauncher.exe")
