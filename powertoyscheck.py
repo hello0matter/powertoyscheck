@@ -1,6 +1,7 @@
 import base64
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -54,6 +55,56 @@ def app_path_missing(app: dict) -> bool:
 
 def ps_single(value: str) -> str:
     return value.replace("'", "''")
+
+
+def edge_exe_path() -> Path:
+    candidates = [
+        Path(os.environ.get("ProgramFiles(x86)", "")) / "Microsoft" / "Edge" / "Application" / "msedge.exe",
+        Path(os.environ.get("ProgramFiles", "")) / "Microsoft" / "Edge" / "Application" / "msedge.exe",
+        Path(os.environ.get("LOCALAPPDATA", "")) / "Microsoft" / "Edge" / "Application" / "msedge.exe",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0]
+
+
+def read_edge_profiles() -> list[dict]:
+    root = Path(os.environ.get("LOCALAPPDATA", "")) / "Microsoft" / "Edge" / "User Data"
+    profiles: list[dict] = []
+    if not root.exists():
+        return profiles
+    for folder in sorted(root.iterdir(), key=lambda p: p.name):
+        if not folder.is_dir() or not (folder.name == "Default" or folder.name.startswith("Profile ")):
+            continue
+        pref = folder / "Preferences"
+        display = folder.name
+        email = ""
+        if pref.exists():
+            try:
+                data = json.loads(pref.read_text(encoding="utf-8-sig"))
+                display = data.get("profile", {}).get("name") or display
+                accounts = data.get("account_info") or []
+                if accounts:
+                    email = accounts[0].get("email", "")
+            except Exception:
+                pass
+        profiles.append({"dir": folder.name, "name": display, "email": email, "path": str(folder)})
+    return profiles
+
+
+def is_edge_app(app: dict) -> bool:
+    path = app.get("application-path", "")
+    name = app.get("application", "")
+    return Path(path).name.lower() == "msedge.exe" or "edge" in name.lower()
+
+
+def edge_profile_args(args: str, profile_dir: str) -> str:
+    cleaned = re.sub(r'--profile-directory=(?:"[^"]*"|\S+)', "", args or "", flags=re.IGNORECASE)
+    cleaned = re.sub(r'--profile-directory\s+(?:"[^"]*"|\S+)', "", cleaned, flags=re.IGNORECASE)
+    cleaned = " ".join(cleaned.split())
+    prefix = f'--profile-directory="{profile_dir}"'
+    return f"{prefix} {cleaned}".strip()
 
 
 class WorkspaceStore:
@@ -198,7 +249,7 @@ class PowerToysCheck(tk.Tk):
 
         app_buttons = ttk.Frame(right)
         app_buttons.grid(row=1, column=0, sticky="ew", pady=(8, 4))
-        for i in range(10):
+        for i in range(9):
             app_buttons.columnconfigure(i, weight=1)
         ttk.Label(app_buttons, text="搜索").grid(row=0, column=0, padx=2, sticky="w")
         ttk.Entry(app_buttons, textvariable=self.app_filter).grid(row=0, column=1, columnspan=3, padx=2, sticky="ew")
@@ -206,21 +257,28 @@ class PowerToysCheck(tk.Tk):
             row=0, column=4, padx=2, sticky="w"
         )
         ttk.Button(app_buttons, text="校验路径", command=self.validate_paths).grid(row=0, column=5, padx=2, sticky="ew")
-        ttk.Button(app_buttons, text="备份/恢复", command=self.show_backup_manager).grid(row=0, column=6, padx=2, sticky="ew")
-        ttk.Button(app_buttons, text="批量 pythonw", command=self.fix_all_pythonw).grid(row=0, column=7, padx=2, sticky="ew")
-        ttk.Button(app_buttons, text="静默模板", command=self.make_hidden_template).grid(row=0, column=8, padx=2, sticky="ew")
-        ttk.Button(app_buttons, text="清空搜索", command=self.clear_filter).grid(row=0, column=9, padx=2, sticky="ew")
+        ttk.Button(app_buttons, text="Edge配置", command=self.show_edge_profile_manager).grid(row=0, column=6, padx=2, sticky="ew")
+        ttk.Button(app_buttons, text="清空搜索", command=self.clear_filter).grid(row=0, column=7, padx=2, sticky="ew")
+        more = ttk.Menubutton(app_buttons, text="更多")
+        more.grid(row=0, column=8, padx=2, sticky="ew")
+        more_menu = tk.Menu(more, tearoff=False)
+        more_menu.add_command(label="备份/恢复", command=self.show_backup_manager)
+        more_menu.add_command(label="复制应用", command=self.duplicate_app)
+        more_menu.add_command(label="打开应用目录", command=self.open_app_folder)
+        more_menu.add_separator()
+        more_menu.add_command(label="改当前应用为 pythonw", command=self.fix_pythonw)
+        more_menu.add_command(label="批量 pythonw", command=self.fix_all_pythonw)
+        more_menu.add_separator()
+        more_menu.add_command(label="静默启动模板", command=self.make_hidden_template)
+        more.configure(menu=more_menu)
 
         ttk.Button(app_buttons, text="新增应用", command=self.add_app).grid(row=1, column=0, padx=2, pady=(5, 0), sticky="ew")
-        ttk.Button(app_buttons, text="复制应用", command=self.duplicate_app).grid(row=1, column=1, padx=2, pady=(5, 0), sticky="ew")
-        ttk.Button(app_buttons, text="应用修改", command=self.update_app).grid(row=1, column=2, padx=2, pady=(5, 0), sticky="ew")
-        ttk.Button(app_buttons, text="删除应用", command=self.delete_app).grid(row=1, column=3, padx=2, pady=(5, 0), sticky="ew")
-        ttk.Button(app_buttons, text="上移", command=lambda: self.move_app(-1)).grid(row=1, column=4, padx=2, pady=(5, 0), sticky="ew")
-        ttk.Button(app_buttons, text="下移", command=lambda: self.move_app(1)).grid(row=1, column=5, padx=2, pady=(5, 0), sticky="ew")
-        ttk.Button(app_buttons, text="启动应用", command=self.launch_app).grid(row=1, column=6, padx=2, pady=(5, 0), sticky="ew")
-        ttk.Button(app_buttons, text="打开目录", command=self.open_app_folder).grid(row=1, column=7, padx=2, pady=(5, 0), sticky="ew")
-        ttk.Button(app_buttons, text="改成 pythonw", command=self.fix_pythonw).grid(row=1, column=8, padx=2, pady=(5, 0), sticky="ew")
-        ttk.Button(app_buttons, text="终端模板", command=self.make_terminal_template).grid(row=1, column=9, padx=2, pady=(5, 0), sticky="ew")
+        ttk.Button(app_buttons, text="应用修改", command=self.update_app).grid(row=1, column=1, padx=2, pady=(5, 0), sticky="ew")
+        ttk.Button(app_buttons, text="删除应用", command=self.delete_app).grid(row=1, column=2, padx=2, pady=(5, 0), sticky="ew")
+        ttk.Button(app_buttons, text="上移", command=lambda: self.move_app(-1)).grid(row=1, column=3, padx=2, pady=(5, 0), sticky="ew")
+        ttk.Button(app_buttons, text="下移", command=lambda: self.move_app(1)).grid(row=1, column=4, padx=2, pady=(5, 0), sticky="ew")
+        ttk.Button(app_buttons, text="启动应用", command=self.launch_app).grid(row=1, column=5, padx=2, pady=(5, 0), sticky="ew")
+        ttk.Button(app_buttons, text="终端模板", command=self.make_terminal_template).grid(row=1, column=6, padx=2, pady=(5, 0), sticky="ew")
 
         self.app_tree = ttk.Treeview(
             right,
@@ -722,6 +780,112 @@ $shortcut.Save()
         more = "" if len(missing) <= 20 else f"\n\n还有 {len(missing) - 20} 个未显示。"
         self.status.set(f"发现 {len(missing)} 个失效路径。已切换到“只看失效路径”。")
         messagebox.showwarning(APP_TITLE, f"发现 {len(missing)} 个失效路径：\n\n{preview}{more}")
+
+    def apply_edge_profile_to_app(self, app: dict, profile_dir: str) -> None:
+        app["application"] = app.get("application") or "Microsoft Edge"
+        app["application-path"] = str(edge_exe_path())
+        app["command-line-arguments"] = edge_profile_args(app.get("command-line-arguments", ""), profile_dir)
+
+    def show_edge_profile_manager(self) -> None:
+        profiles = read_edge_profiles()
+        if not profiles:
+            messagebox.showwarning(APP_TITLE, "没有找到 Edge 配置文件目录。")
+            return
+
+        win = tk.Toplevel(self)
+        win.title("Edge 配置文件")
+        win.geometry("780x430")
+        win.minsize(680, 360)
+        win.columnconfigure(0, weight=1)
+        win.rowconfigure(1, weight=1)
+
+        ttk.Label(win, text="选择一个 Edge 配置文件，然后应用到 PowerToys 的 Edge 启动项。", padding=(10, 8)).grid(
+            row=0, column=0, columnspan=4, sticky="ew"
+        )
+
+        tree = ttk.Treeview(win, columns=("dir", "name", "email", "path"), show="headings", selectmode="browse")
+        for col, text, width in (
+            ("dir", "目录名", 120),
+            ("name", "显示名", 160),
+            ("email", "账号", 220),
+            ("path", "路径", 260),
+        ):
+            tree.heading(col, text=text)
+            tree.column(col, width=width, anchor="w")
+        tree.grid(row=1, column=0, columnspan=4, sticky="nsew", padx=10, pady=(0, 8))
+        for i, profile in enumerate(profiles):
+            tree.insert(
+                "",
+                "end",
+                iid=str(i),
+                values=(profile["dir"], profile["name"], profile["email"], profile["path"]),
+            )
+
+        def selected_profile() -> dict | None:
+            sel = tree.selection()
+            if not sel:
+                messagebox.showwarning(APP_TITLE, "请先选择一个 Edge 配置文件。", parent=win)
+                return None
+            return profiles[int(sel[0])]
+
+        def apply_current() -> None:
+            profile = selected_profile()
+            if not profile:
+                return
+            ws = self.selected_workspace()
+            app = self.selected_app()
+            if not ws or app is None or self.current_app_index is None:
+                messagebox.showwarning(APP_TITLE, "请先选择一个 PowerToys 应用项。", parent=win)
+                return
+            if not is_edge_app(app) and not messagebox.askyesno(
+                APP_TITLE,
+                "当前选中的不是 Edge 项，仍然把它改成 Edge 启动项吗？",
+                parent=win,
+            ):
+                return
+            ws_idx = self.current_workspace_index
+            app_idx = self.current_app_index
+            self.apply_edge_profile_to_app(app, profile["dir"])
+            self.refresh_apps()
+            self.restore_selection(ws_idx, app_idx)
+            self.status.set(f"已把当前应用设置为 Edge {profile['dir']}。点击“保存配置”写入文件。")
+
+        def apply_workspace() -> None:
+            profile = selected_profile()
+            if not profile:
+                return
+            ws = self.selected_workspace()
+            if not ws:
+                return
+            changed = 0
+            for app in ws.get("applications", []):
+                if is_edge_app(app):
+                    self.apply_edge_profile_to_app(app, profile["dir"])
+                    changed += 1
+            self.refresh_apps()
+            self.status.set(f"已修改当前启动区 {changed} 个 Edge 项为 {profile['dir']}。点击“保存配置”写入文件。")
+            messagebox.showinfo(APP_TITLE, f"已修改当前启动区 {changed} 个 Edge 项。", parent=win)
+
+        def apply_all() -> None:
+            profile = selected_profile()
+            if not profile:
+                return
+            changed = 0
+            for ws in self.store.workspaces:
+                for app in ws.get("applications", []):
+                    if is_edge_app(app):
+                        self.apply_edge_profile_to_app(app, profile["dir"])
+                        changed += 1
+            self.refresh_apps()
+            self.status.set(f"已修改全部启动区 {changed} 个 Edge 项为 {profile['dir']}。点击“保存配置”写入文件。")
+            messagebox.showinfo(APP_TITLE, f"已修改全部启动区 {changed} 个 Edge 项。", parent=win)
+
+        ttk.Button(win, text="应用到当前应用", command=apply_current).grid(row=2, column=0, padx=10, pady=(0, 10), sticky="ew")
+        ttk.Button(win, text="应用到当前启动区全部 Edge", command=apply_workspace).grid(
+            row=2, column=1, padx=4, pady=(0, 10), sticky="ew"
+        )
+        ttk.Button(win, text="应用到全部启动区 Edge", command=apply_all).grid(row=2, column=2, padx=4, pady=(0, 10), sticky="ew")
+        ttk.Button(win, text="关闭", command=win.destroy).grid(row=2, column=3, padx=10, pady=(0, 10), sticky="ew")
 
     def fix_all_pythonw(self) -> None:
         changed = 0

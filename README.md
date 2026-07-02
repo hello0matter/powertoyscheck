@@ -62,6 +62,7 @@ powertoyscheck.pyw
 - “只看失效路径”和“校验路径”，快速找出路径为空或文件不存在的启动项。
 - 复制应用、打开应用所在目录。
 - 修改应用路径、启动参数、管理员启动、最小化、最大化、显示器和窗口位置。
+- Edge 配置文件选择：读取本机 Edge Profiles，按目录名、显示名、邮箱选择，然后应用到当前 Edge 项、当前启动区全部 Edge 项或全部启动区 Edge 项。
 - 调用 PowerToys 自带 `PowerToys.WorkspacesLauncher.exe` 启动整个启动区。
 - 一键把 `python.exe` 改成 `pythonw.exe`，避免 GUI Python 脚本出现黑窗口。
 - 批量把所有可修复的 `python.exe` 改成 `pythonw.exe`。
@@ -74,10 +75,13 @@ powertoyscheck.pyw
 - `保存配置`：自动应用当前正在编辑的启动区/应用表单，然后写入 JSON。
 - `应用修改`：只把当前应用表单应用到内存，不写文件。
 - `校验路径`：扫描所有启动区应用，发现失效路径后自动切到“只看失效路径”。
+- `Edge配置`：选择 Edge Profile，并给 PowerToys 的 Edge 启动项自动写入 `--profile-directory="Profile X"`。
 - `备份/恢复`：管理自动备份，恢复前会先备份当前配置。
 - `批量 pythonw`：把存在对应 `pythonw.exe` 的 `python.exe` 项批量修好。
 - `终端模板`：生成 `wt.exe ... cmd /k ...`，适合要看控制台输出的 exe。
 - `静默模板`：生成 `powershell.exe -WindowStyle Hidden ... Start-Process`，适合后台启动 exe。
+
+部分低频功能在界面里的 `更多` 菜单中，避免按钮区过密。
 
 ## Python 黑窗口
 
