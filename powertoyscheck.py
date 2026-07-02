@@ -827,7 +827,7 @@ $shortcut.Save()
         self.app_application.set("Windows Terminal")
         self.app_title.set(title)
         self.app_path.set(str(wt))
-        self.app_args.set(f'new-tab --title "{title}" cmd /k "{exe}"')
+        self.app_args.set(f'new-tab --title "{title}" -d "{Path(exe).parent}" cmd /k ".\\{Path(exe).name}"')
 
     def make_hidden_template(self) -> None:
         exe = filedialog.askopenfilename(
