@@ -1,63 +1,73 @@
 # powertoyscheck
 
-`powertoyscheck` is a small Python/Tkinter GUI for directly managing Microsoft PowerToys Workspaces configuration.
+`powertoyscheck` 是一个用 Python/Tkinter 写的 PowerToys Workspaces 配置管理工具。
 
-It edits:
+它直接编辑这个文件：
 
 ```text
 %LOCALAPPDATA%\Microsoft\PowerToys\Workspaces\workspaces.json
 ```
 
-On this machine that is usually:
+本机通常是：
 
 ```text
 C:\Users\Administrator\AppData\Local\Microsoft\PowerToys\Workspaces\workspaces.json
 ```
 
-## Why
-
-PowerToys Workspaces supports editing apps, window positions, CLI arguments, desktop shortcuts, and "Launch as Admin". Microsoft also documents an important caveat: re-capturing a workspace can remove previous CLI arguments and settings. This tool edits the JSON directly so you can add, remove, and update workspace entries without re-capturing.
-
-Official reference:
+官方文档：
 
 ```text
 https://learn.microsoft.com/en-us/windows/powertoys/workspaces
 ```
 
-## Run
+## 启动
 
-No third-party Python packages are required.
+不需要安装第三方 Python 包。
 
-Console/debug mode:
+带控制台调试：
 
 ```powershell
 python .\powertoyscheck.py
 ```
 
-No console window:
+无黑窗口启动：
 
 ```powershell
 pythonw .\powertoyscheck.pyw
 ```
 
-You can also double-click `powertoyscheck.pyw`.
+也可以直接双击：
 
-## Main Features
+```text
+powertoyscheck.pyw
+```
 
-- Load and save `workspaces.json`.
-- Automatic timestamped backup before every save.
-- Add, duplicate, delete, and rename workspaces.
-- Add, update, delete, reorder, and launch workspace apps.
-- Edit app path, arguments, admin flag, minimized/maximized flags, monitor, and position.
-- Launch the selected workspace through PowerToys' own `PowerToys.WorkspacesLauncher.exe`.
-- Convert a selected `python.exe` app entry to `pythonw.exe` to avoid the black console window.
-- Generate a Windows Terminal command template for launching an `.exe` inside `wt.exe`.
+程序里有“桌面快捷方式”按钮，可以在桌面生成 `powertoyscheck.lnk`。
 
-## Avoiding the Python Black Window
+## 重要交互
 
-For GUI Python scripts, use `pythonw.exe` instead of `python.exe`.
+修改下面“当前应用”里的路径、参数、管理员启动等字段后，直接点顶部“保存配置”即可。
 
-Example PowerToys app entry:
+`保存配置` 会自动先把当前表单内容应用到选中的启动区和应用，再写入 JSON 文件。
+
+如果只想暂存但不保存文件，可以点“应用修改”。
+
+## 功能
+
+- 读取和保存 PowerToys Workspaces 的 `workspaces.json`。
+- 每次保存前自动备份。
+- 启动区新增、复制、删除、重命名。
+- 应用新增、修改、删除、上移、下移、启动。
+- 修改应用路径、启动参数、管理员启动、最小化、最大化、显示器和窗口位置。
+- 调用 PowerToys 自带 `PowerToys.WorkspacesLauncher.exe` 启动整个启动区。
+- 一键把 `python.exe` 改成 `pythonw.exe`，避免 GUI Python 脚本出现黑窗口。
+- 生成 Windows Terminal 启动 exe 的参数模板。
+
+## Python 黑窗口
+
+GUI Python 脚本建议用 `pythonw.exe`，不要用 `python.exe`。
+
+示例：
 
 ```json
 {
@@ -66,33 +76,33 @@ Example PowerToys app entry:
 }
 ```
 
-`pythonw.exe` does not create a console window, so closing a console window cannot kill the GUI script.
+`pythonw.exe` 不创建控制台窗口，所以不会因为关闭黑窗口而把 GUI 脚本关掉。
 
-## Running an EXE in Windows Terminal
+## Windows Terminal 启动 exe
 
-Use `wt.exe` as the app path and put the executable in the arguments.
+路径填：
 
-Example:
-
-```json
-{
-  "application-path": "C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\WindowsApps\\wt.exe",
-  "command-line-arguments": "new-tab --title \"CLI Proxy API\" cmd /k \"D:\\tmp\\anjian\\pj\\st\\CLIProxyAPI_7.2.27_windows_amd64\\cli-proxy-api.exe\""
-}
+```text
+C:\Users\Administrator\AppData\Local\Microsoft\WindowsApps\wt.exe
 ```
 
-If you want to run an executable silently in the background, do not use Windows Terminal. Use a small launcher or `Start-Process` instead.
+参数示例：
 
-## Backup Location
+```text
+new-tab --title "CLI Proxy API" cmd /k "D:\tmp\anjian\pj\st\CLIProxyAPI_7.2.27_windows_amd64\cli-proxy-api.exe"
+```
 
-Backups are written next to the PowerToys file:
+如果你想后台静默启动 exe，不要用 Windows Terminal，应该改用 `Start-Process` 或单独的启动器。
+
+## 备份位置
+
+保存前的备份在：
 
 ```text
 %LOCALAPPDATA%\Microsoft\PowerToys\Workspaces\powertoyscheck-backups\
 ```
 
-## Notes
+## 注意
 
-- This tool preserves unknown JSON fields when editing existing records.
-- Click `Save` to write changes. Editing the form only changes the in-memory copy.
-- If PowerToys is open while you edit the file, reload PowerToys after saving if it does not notice the change.
+- 程序会保留 PowerToys JSON 里不认识的字段。
+- 如果 PowerToys 正在运行，保存后它不一定立刻重新读取配置；必要时重启 PowerToys。

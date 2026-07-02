@@ -1,6 +1,8 @@
+import base64
 import json
 import os
 import subprocess
+import sys
 import uuid
 from copy import deepcopy
 from datetime import datetime
@@ -9,7 +11,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
 
 
-APP_TITLE = "PowerToys Workspaces Check"
+APP_TITLE = "PowerToys 启动区配置管理"
 CREATE_NO_WINDOW = 0x08000000 if os.name == "nt" else 0
 
 
@@ -94,7 +96,7 @@ class PowerToysCheck(tk.Tk):
 
     def _vars(self) -> None:
         self.config_path = tk.StringVar(value=str(default_config_path()))
-        self.status = tk.StringVar(value="Ready")
+        self.status = tk.StringVar(value="就绪")
 
         self.ws_name = tk.StringVar()
         self.ws_shortcut = tk.BooleanVar(value=True)
@@ -121,12 +123,13 @@ class PowerToysCheck(tk.Tk):
         top = ttk.Frame(self, padding=(10, 8))
         top.grid(row=0, column=0, sticky="ew")
         top.columnconfigure(1, weight=1)
-        ttk.Label(top, text="Config").grid(row=0, column=0, sticky="w")
+        ttk.Label(top, text="配置文件").grid(row=0, column=0, sticky="w")
         ttk.Entry(top, textvariable=self.config_path).grid(row=0, column=1, padx=6, sticky="ew")
-        ttk.Button(top, text="Browse", command=self.browse_config).grid(row=0, column=2, padx=2)
-        ttk.Button(top, text="Reload", command=self.reload).grid(row=0, column=3, padx=2)
-        ttk.Button(top, text="Save", command=self.save).grid(row=0, column=4, padx=2)
-        ttk.Button(top, text="Open Folder", command=self.open_config_folder).grid(row=0, column=5, padx=2)
+        ttk.Button(top, text="选择", command=self.browse_config).grid(row=0, column=2, padx=2)
+        ttk.Button(top, text="重新加载", command=self.reload).grid(row=0, column=3, padx=2)
+        ttk.Button(top, text="保存配置", command=self.save).grid(row=0, column=4, padx=2)
+        ttk.Button(top, text="打开目录", command=self.open_config_folder).grid(row=0, column=5, padx=2)
+        ttk.Button(top, text="桌面快捷方式", command=self.create_desktop_shortcut).grid(row=0, column=6, padx=2)
 
         pane = ttk.PanedWindow(self, orient=tk.HORIZONTAL)
         pane.grid(row=1, column=0, sticky="nsew", padx=10)
@@ -137,8 +140,8 @@ class PowerToysCheck(tk.Tk):
         pane.add(left, weight=1)
 
         self.ws_tree = ttk.Treeview(left, columns=("name", "apps", "id"), show="headings", selectmode="browse")
-        self.ws_tree.heading("name", text="Workspace")
-        self.ws_tree.heading("apps", text="Apps")
+        self.ws_tree.heading("name", text="启动区")
+        self.ws_tree.heading("apps", text="数量")
         self.ws_tree.heading("id", text="ID")
         self.ws_tree.column("name", width=190, anchor="w")
         self.ws_tree.column("apps", width=55, anchor="center")
@@ -150,37 +153,37 @@ class PowerToysCheck(tk.Tk):
         ws_buttons.grid(row=1, column=0, sticky="ew", pady=(8, 0))
         for i in range(4):
             ws_buttons.columnconfigure(i, weight=1)
-        ttk.Button(ws_buttons, text="Add", command=self.add_workspace).grid(row=0, column=0, padx=2, sticky="ew")
-        ttk.Button(ws_buttons, text="Duplicate", command=self.duplicate_workspace).grid(row=0, column=1, padx=2, sticky="ew")
-        ttk.Button(ws_buttons, text="Delete", command=self.delete_workspace).grid(row=0, column=2, padx=2, sticky="ew")
-        ttk.Button(ws_buttons, text="Launch", command=self.launch_workspace).grid(row=0, column=3, padx=2, sticky="ew")
+        ttk.Button(ws_buttons, text="新增", command=self.add_workspace).grid(row=0, column=0, padx=2, sticky="ew")
+        ttk.Button(ws_buttons, text="复制", command=self.duplicate_workspace).grid(row=0, column=1, padx=2, sticky="ew")
+        ttk.Button(ws_buttons, text="删除", command=self.delete_workspace).grid(row=0, column=2, padx=2, sticky="ew")
+        ttk.Button(ws_buttons, text="启动", command=self.launch_workspace).grid(row=0, column=3, padx=2, sticky="ew")
 
         right = ttk.Frame(pane)
         right.columnconfigure(0, weight=1)
         right.rowconfigure(2, weight=1)
         pane.add(right, weight=4)
 
-        ws_form = ttk.LabelFrame(right, text="Workspace", padding=8)
+        ws_form = ttk.LabelFrame(right, text="启动区", padding=8)
         ws_form.grid(row=0, column=0, sticky="ew")
         ws_form.columnconfigure(1, weight=1)
-        ttk.Label(ws_form, text="Name").grid(row=0, column=0, sticky="w")
+        ttk.Label(ws_form, text="名称").grid(row=0, column=0, sticky="w")
         ttk.Entry(ws_form, textvariable=self.ws_name).grid(row=0, column=1, padx=6, sticky="ew")
-        ttk.Checkbutton(ws_form, text="Desktop shortcut needed", variable=self.ws_shortcut).grid(row=0, column=2, padx=6)
-        ttk.Checkbutton(ws_form, text="Move existing windows", variable=self.ws_move_existing).grid(row=0, column=3, padx=6)
-        ttk.Button(ws_form, text="Apply Workspace", command=self.apply_workspace).grid(row=0, column=4, padx=2)
+        ttk.Checkbutton(ws_form, text="需要桌面快捷方式", variable=self.ws_shortcut).grid(row=0, column=2, padx=6)
+        ttk.Checkbutton(ws_form, text="移动已有窗口", variable=self.ws_move_existing).grid(row=0, column=3, padx=6)
+        ttk.Button(ws_form, text="应用启动区", command=self.apply_workspace).grid(row=0, column=4, padx=2)
 
         app_buttons = ttk.Frame(right)
         app_buttons.grid(row=1, column=0, sticky="ew", pady=(8, 4))
         for i in range(8):
             app_buttons.columnconfigure(i, weight=1)
-        ttk.Button(app_buttons, text="Add App", command=self.add_app).grid(row=0, column=0, padx=2, sticky="ew")
-        ttk.Button(app_buttons, text="Update App", command=self.update_app).grid(row=0, column=1, padx=2, sticky="ew")
-        ttk.Button(app_buttons, text="Delete App", command=self.delete_app).grid(row=0, column=2, padx=2, sticky="ew")
-        ttk.Button(app_buttons, text="Up", command=lambda: self.move_app(-1)).grid(row=0, column=3, padx=2, sticky="ew")
-        ttk.Button(app_buttons, text="Down", command=lambda: self.move_app(1)).grid(row=0, column=4, padx=2, sticky="ew")
-        ttk.Button(app_buttons, text="Launch App", command=self.launch_app).grid(row=0, column=5, padx=2, sticky="ew")
-        ttk.Button(app_buttons, text="Python -> pythonw", command=self.fix_pythonw).grid(row=0, column=6, padx=2, sticky="ew")
-        ttk.Button(app_buttons, text="WT Template", command=self.make_terminal_template).grid(row=0, column=7, padx=2, sticky="ew")
+        ttk.Button(app_buttons, text="新增应用", command=self.add_app).grid(row=0, column=0, padx=2, sticky="ew")
+        ttk.Button(app_buttons, text="应用修改", command=self.update_app).grid(row=0, column=1, padx=2, sticky="ew")
+        ttk.Button(app_buttons, text="删除应用", command=self.delete_app).grid(row=0, column=2, padx=2, sticky="ew")
+        ttk.Button(app_buttons, text="上移", command=lambda: self.move_app(-1)).grid(row=0, column=3, padx=2, sticky="ew")
+        ttk.Button(app_buttons, text="下移", command=lambda: self.move_app(1)).grid(row=0, column=4, padx=2, sticky="ew")
+        ttk.Button(app_buttons, text="启动应用", command=self.launch_app).grid(row=0, column=5, padx=2, sticky="ew")
+        ttk.Button(app_buttons, text="改成 pythonw", command=self.fix_pythonw).grid(row=0, column=6, padx=2, sticky="ew")
+        ttk.Button(app_buttons, text="终端模板", command=self.make_terminal_template).grid(row=0, column=7, padx=2, sticky="ew")
 
         self.app_tree = ttk.Treeview(
             right,
@@ -189,42 +192,42 @@ class PowerToysCheck(tk.Tk):
             selectmode="browse",
         )
         for col, text, width in (
-            ("application", "Application", 130),
-            ("title", "Window Title", 180),
-            ("path", "Path", 330),
-            ("args", "Arguments", 330),
-            ("elevated", "Admin", 70),
+            ("application", "应用名", 130),
+            ("title", "窗口标题", 180),
+            ("path", "程序路径", 330),
+            ("args", "启动参数", 330),
+            ("elevated", "管理员", 70),
         ):
             self.app_tree.heading(col, text=text)
             self.app_tree.column(col, width=width, anchor="w")
         self.app_tree.grid(row=2, column=0, sticky="nsew")
         self.app_tree.bind("<<TreeviewSelect>>", self.on_app_select)
 
-        form = ttk.LabelFrame(right, text="Selected Application", padding=8)
+        form = ttk.LabelFrame(right, text="当前应用", padding=8)
         form.grid(row=3, column=0, sticky="ew", pady=(8, 0))
         for i in range(6):
             form.columnconfigure(i, weight=1 if i in {1, 3, 5} else 0)
 
-        ttk.Label(form, text="Application").grid(row=0, column=0, sticky="w")
+        ttk.Label(form, text="应用名").grid(row=0, column=0, sticky="w")
         ttk.Entry(form, textvariable=self.app_application).grid(row=0, column=1, padx=6, sticky="ew")
-        ttk.Label(form, text="Title").grid(row=0, column=2, sticky="w")
+        ttk.Label(form, text="标题").grid(row=0, column=2, sticky="w")
         ttk.Entry(form, textvariable=self.app_title).grid(row=0, column=3, padx=6, sticky="ew")
-        ttk.Label(form, text="Monitor").grid(row=0, column=4, sticky="w")
+        ttk.Label(form, text="显示器").grid(row=0, column=4, sticky="w")
         ttk.Entry(form, textvariable=self.app_monitor, width=8).grid(row=0, column=5, padx=6, sticky="w")
 
-        ttk.Label(form, text="Path").grid(row=1, column=0, sticky="w", pady=(6, 0))
+        ttk.Label(form, text="路径").grid(row=1, column=0, sticky="w", pady=(6, 0))
         ttk.Entry(form, textvariable=self.app_path).grid(row=1, column=1, columnspan=4, padx=6, pady=(6, 0), sticky="ew")
-        ttk.Button(form, text="Browse", command=self.browse_app).grid(row=1, column=5, pady=(6, 0), sticky="ew")
+        ttk.Button(form, text="选择", command=self.browse_app).grid(row=1, column=5, pady=(6, 0), sticky="ew")
 
-        ttk.Label(form, text="Arguments").grid(row=2, column=0, sticky="w", pady=(6, 0))
+        ttk.Label(form, text="参数").grid(row=2, column=0, sticky="w", pady=(6, 0))
         ttk.Entry(form, textvariable=self.app_args).grid(row=2, column=1, columnspan=5, padx=6, pady=(6, 0), sticky="ew")
 
         checks = ttk.Frame(form)
         checks.grid(row=3, column=0, columnspan=6, sticky="ew", pady=(6, 0))
-        ttk.Checkbutton(checks, text="Launch as Admin", variable=self.app_elevated).pack(side=tk.LEFT, padx=(0, 16))
-        ttk.Checkbutton(checks, text="Can Launch Elevated", variable=self.app_can_elevate).pack(side=tk.LEFT, padx=(0, 16))
-        ttk.Checkbutton(checks, text="Minimized", variable=self.app_minimized).pack(side=tk.LEFT, padx=(0, 16))
-        ttk.Checkbutton(checks, text="Maximized", variable=self.app_maximized).pack(side=tk.LEFT, padx=(0, 16))
+        ttk.Checkbutton(checks, text="管理员启动", variable=self.app_elevated).pack(side=tk.LEFT, padx=(0, 16))
+        ttk.Checkbutton(checks, text="允许提权", variable=self.app_can_elevate).pack(side=tk.LEFT, padx=(0, 16))
+        ttk.Checkbutton(checks, text="最小化", variable=self.app_minimized).pack(side=tk.LEFT, padx=(0, 16))
+        ttk.Checkbutton(checks, text="最大化", variable=self.app_maximized).pack(side=tk.LEFT, padx=(0, 16))
 
         pos = ttk.Frame(form)
         pos.grid(row=4, column=0, columnspan=6, sticky="w", pady=(6, 0))
@@ -253,7 +256,7 @@ class PowerToysCheck(tk.Tk):
 
     def browse_config(self) -> None:
         path = filedialog.askopenfilename(
-            title="Select workspaces.json",
+            title="选择 workspaces.json",
             filetypes=[("JSON", "*.json"), ("All files", "*.*")],
             initialdir=str(default_config_path().parent),
         )
@@ -263,7 +266,7 @@ class PowerToysCheck(tk.Tk):
 
     def browse_app(self) -> None:
         path = filedialog.askopenfilename(
-            title="Select executable or script",
+            title="选择 exe 或脚本",
             filetypes=[("Executable or script", "*.exe *.py *.bat *.cmd"), ("All files", "*.*")],
         )
         if path:
@@ -277,12 +280,45 @@ class PowerToysCheck(tk.Tk):
         folder.mkdir(parents=True, exist_ok=True)
         os.startfile(str(folder))
 
+    def create_desktop_shortcut(self) -> None:
+        if os.name != "nt":
+            messagebox.showinfo(APP_TITLE, "只有 Windows 支持创建桌面快捷方式。")
+            return
+        desktop = Path(os.environ.get("USERPROFILE", str(Path.home()))) / "Desktop"
+        shortcut_path = desktop / "powertoyscheck.lnk"
+        pythonw = Path(sys.executable).with_name("pythonw.exe")
+        if not pythonw.exists():
+            pythonw = Path(sys.executable)
+        script = Path(__file__).with_suffix(".pyw")
+
+        ps = f"""
+$shell = New-Object -ComObject WScript.Shell
+$shortcut = $shell.CreateShortcut('{str(shortcut_path).replace("'", "''")}')
+$shortcut.TargetPath = '{str(pythonw).replace("'", "''")}'
+$shortcut.Arguments = '"{str(script).replace("'", "''")}"'
+$shortcut.WorkingDirectory = '{str(script.parent).replace("'", "''")}'
+$shortcut.IconLocation = '{str(pythonw).replace("'", "''")}'
+$shortcut.Save()
+"""
+        encoded = base64.b64encode(ps.encode("utf-16le")).decode("ascii")
+        try:
+            subprocess.run(
+                ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded],
+                check=True,
+                creationflags=CREATE_NO_WINDOW,
+            )
+        except Exception as exc:
+            messagebox.showerror(APP_TITLE, f"创建快捷方式失败：\n{exc}")
+            return
+        self.status.set(f"已创建桌面快捷方式：{shortcut_path}")
+        messagebox.showinfo(APP_TITLE, f"已创建桌面快捷方式：\n{shortcut_path}")
+
     def reload(self) -> None:
         self.store = WorkspaceStore(Path(self.config_path.get()).expanduser())
         try:
             self.store.load()
         except Exception as exc:
-            messagebox.showerror(APP_TITLE, f"Failed to load JSON:\n{exc}")
+            messagebox.showerror(APP_TITLE, f"读取 JSON 失败：\n{exc}")
             return
         self.current_workspace_index = None
         self.current_app_index = None
@@ -291,16 +327,58 @@ class PowerToysCheck(tk.Tk):
             self.ws_tree.selection_set("0")
             self.ws_tree.focus("0")
             self.on_workspace_select()
-        self.status.set(f"Loaded {self.store.path}")
+        self.status.set(f"已加载：{self.store.path}")
 
     def save(self) -> None:
+        if not self.apply_current_forms_to_memory():
+            return
+        ws_idx = self.current_workspace_index
+        app_idx = self.current_app_index
         try:
             backup = self.store.save()
         except Exception as exc:
-            messagebox.showerror(APP_TITLE, f"Failed to save JSON:\n{exc}")
+            messagebox.showerror(APP_TITLE, f"保存 JSON 失败：\n{exc}")
             return
-        self.status.set(f"Saved. Backup: {backup}")
-        messagebox.showinfo(APP_TITLE, f"Saved.\nBackup created:\n{backup}")
+        self.refresh_workspaces()
+        self.restore_selection(ws_idx, app_idx)
+        self.status.set(f"已保存。备份：{backup}")
+        messagebox.showinfo(APP_TITLE, f"已保存配置。\n自动备份文件：\n{backup}")
+
+    def restore_selection(self, ws_idx: int | None, app_idx: int | None = None) -> None:
+        if ws_idx is None or not (0 <= ws_idx < len(self.store.workspaces)):
+            return
+        self.current_workspace_index = ws_idx
+        self.ws_tree.selection_set(str(ws_idx))
+        self.ws_tree.focus(str(ws_idx))
+        self.refresh_apps()
+        apps = self.store.workspaces[ws_idx].get("applications", [])
+        if app_idx is not None and 0 <= app_idx < len(apps):
+            self.current_app_index = app_idx
+            self.app_tree.selection_set(str(app_idx))
+            self.app_tree.focus(str(app_idx))
+            self.on_app_select()
+
+    def apply_current_forms_to_memory(self) -> bool:
+        ws = self.selected_workspace()
+        if not ws:
+            return True
+
+        ws["name"] = self.ws_name.get().strip()
+        ws["is-shortcut-needed"] = bool(self.ws_shortcut.get())
+        ws["move-existing-windows"] = bool(self.ws_move_existing.get())
+
+        if self.current_app_index is None:
+            return True
+
+        apps = ws.setdefault("applications", [])
+        if not (0 <= self.current_app_index < len(apps)):
+            return True
+
+        if not self.app_path.get().strip():
+            return messagebox.askyesno(APP_TITLE, "当前应用路径为空，确定仍然保存吗？")
+
+        apps[self.current_app_index] = self.form_to_app(apps[self.current_app_index])
+        return True
 
     def refresh_workspaces(self) -> None:
         self.ws_tree.delete(*self.ws_tree.get_children())
@@ -391,7 +469,7 @@ class PowerToysCheck(tk.Tk):
         self.pos_h.set(str(pos.get("height", 700)))
 
     def add_workspace(self) -> None:
-        name = simpledialog.askstring(APP_TITLE, "Workspace name:", initialvalue="New workspace")
+        name = simpledialog.askstring(APP_TITLE, "启动区名称：", initialvalue="新启动区")
         if not name:
             return
         now = datetime.utcnow().isoformat(timespec="seconds") + "Z"
@@ -419,7 +497,7 @@ class PowerToysCheck(tk.Tk):
             return
         clone = deepcopy(ws)
         clone["id"] = new_guid()
-        clone["name"] = f"{clone.get('name', 'Workspace')} copy"
+        clone["name"] = f"{clone.get('name', '启动区')} 副本"
         for app in clone.get("applications", []):
             app["id"] = new_guid()
         self.store.workspaces.append(clone)
@@ -431,7 +509,7 @@ class PowerToysCheck(tk.Tk):
         ws = self.selected_workspace()
         if not ws:
             return
-        if not messagebox.askyesno(APP_TITLE, f"Delete workspace '{ws.get('name', '')}'?"):
+        if not messagebox.askyesno(APP_TITLE, f"确定删除启动区“{ws.get('name', '')}”吗？"):
             return
         del self.store.workspaces[self.current_workspace_index]
         self.current_workspace_index = None
@@ -445,7 +523,7 @@ class PowerToysCheck(tk.Tk):
         ws["is-shortcut-needed"] = bool(self.ws_shortcut.get())
         ws["move-existing-windows"] = bool(self.ws_move_existing.get())
         self.refresh_workspaces()
-        self.status.set("Workspace updated in memory. Click Save to write file.")
+        self.status.set("启动区修改已应用到内存。点击“保存配置”写入文件。")
 
     def read_int(self, var: tk.StringVar, default: int) -> int:
         try:
@@ -480,11 +558,11 @@ class PowerToysCheck(tk.Tk):
     def add_app(self) -> None:
         ws = self.selected_workspace()
         if not ws:
-            messagebox.showwarning(APP_TITLE, "Select or create a workspace first.")
+            messagebox.showwarning(APP_TITLE, "请先选择或新增一个启动区。")
             return
         app = self.form_to_app()
         if not app.get("application-path"):
-            messagebox.showwarning(APP_TITLE, "Application path is required.")
+            messagebox.showwarning(APP_TITLE, "应用路径不能为空。")
             return
         ws.setdefault("applications", []).append(app)
         self.refresh_workspaces()
@@ -508,7 +586,7 @@ class PowerToysCheck(tk.Tk):
         self.app_tree.selection_set(str(idx))
         self.app_tree.focus(str(idx))
         self.on_app_select()
-        self.status.set("Application updated in memory. Click Save to write file.")
+        self.status.set("应用修改已应用到内存。点击“保存配置”写入文件。")
 
     def delete_app(self) -> None:
         ws = self.selected_workspace()
@@ -516,7 +594,7 @@ class PowerToysCheck(tk.Tk):
         if not ws or app is None or self.current_app_index is None:
             return
         label = app.get("application") or app.get("application-path") or "selected app"
-        if not messagebox.askyesno(APP_TITLE, f"Delete '{label}'?"):
+        if not messagebox.askyesno(APP_TITLE, f"确定删除“{label}”吗？"):
             return
         del ws.setdefault("applications", [])[self.current_app_index]
         self.current_app_index = None
@@ -549,17 +627,17 @@ class PowerToysCheck(tk.Tk):
             return
         path = app.get("application-path", "")
         if not is_python_path(path):
-            messagebox.showinfo(APP_TITLE, "Selected app is not python.exe/pythonw.exe.")
+            messagebox.showinfo(APP_TITLE, "当前应用不是 python.exe/pythonw.exe。")
             return
         new_path = pythonw_path(path)
         app["application-path"] = new_path
         self.app_path.set(new_path)
         self.refresh_apps()
-        self.status.set("Changed python.exe to pythonw.exe in memory. Click Save to write file.")
+        self.status.set("已在内存中改成 pythonw.exe。点击“保存配置”写入文件。")
 
     def make_terminal_template(self) -> None:
         exe = filedialog.askopenfilename(
-            title="Select exe to run in Windows Terminal",
+            title="选择要在 Windows Terminal 中启动的 exe",
             filetypes=[("Executable", "*.exe"), ("All files", "*.*")],
         )
         if not exe:
@@ -577,7 +655,7 @@ class PowerToysCheck(tk.Tk):
             return
         launcher = default_launcher_path()
         if not launcher.exists():
-            path = filedialog.askopenfilename(title="Select PowerToys.WorkspacesLauncher.exe")
+            path = filedialog.askopenfilename(title="选择 PowerToys.WorkspacesLauncher.exe")
             if not path:
                 return
             launcher = Path(path)
@@ -588,7 +666,7 @@ class PowerToysCheck(tk.Tk):
                 creationflags=CREATE_NO_WINDOW,
             )
         except Exception as exc:
-            messagebox.showerror(APP_TITLE, f"Failed to launch workspace:\n{exc}")
+            messagebox.showerror(APP_TITLE, f"启动启动区失败：\n{exc}")
 
     def launch_app(self) -> None:
         app = self.selected_app() or self.form_to_app()
@@ -602,7 +680,7 @@ class PowerToysCheck(tk.Tk):
                 command_line = f"{command_line} {args}"
             subprocess.Popen(command_line, cwd=str(Path(path).parent), creationflags=CREATE_NO_WINDOW)
         except Exception as exc:
-            messagebox.showerror(APP_TITLE, f"Failed to launch app:\n{exc}")
+            messagebox.showerror(APP_TITLE, f"启动应用失败：\n{exc}")
 
 
 if __name__ == "__main__":
